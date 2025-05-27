@@ -54,6 +54,14 @@ Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::delete('especialistas/{id}', [EspecialistaController::class, 'borrarEspecialista']);
 });
 
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/documentos', [DocumentoController::class, 'subirDocumento']);
+    Route::delete('/documentos/{id}', [DocumentoController::class, 'eliminarDocumento']);
+    Route::get('/documentos', [DocumentoController::class, 'listarMisDocumentos']);
+    Route::get('/documentos/{id}/descargar', [DocumentoController::class, 'descargarDocumento']);
+});
+
+
 Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     Route::apiResource('usuarios', UserController::class);
 });

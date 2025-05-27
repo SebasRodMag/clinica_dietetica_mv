@@ -7,22 +7,27 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Run the migrations.
+     * Migrar la base de datos para crear la tabla 'documentos'.
      */
     public function up()
     {
         Schema::create('documentos', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('historial_id')->constrained()->onDelete('cascade');
+            $table->foreignId('historial_id')->nullable()->constrained()->onDelete('cascade');
+            $table->foreignId('user_id')->constrained('users')->onDelete('cascade');
             $table->string('nombre');
-            $table->string('archivo'); // ruta al archivo en storage
+            $table->string('archivo');
+            $table->string('tipo')->nullable();
+            $table->integer('tamano')->nullable();
+            $table->text('descripcion')->nullable();
             $table->timestamps();
             $table->softDeletes();
         });
     }
 
     /**
-     * Reverse the migrations.
+     * Revertir la migración.
+     * 
      */
     public function down(): void
     {
