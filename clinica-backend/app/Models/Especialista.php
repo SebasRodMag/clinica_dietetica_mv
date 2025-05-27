@@ -13,7 +13,6 @@ class Especialista extends Model
     protected $fillable = [
         'user_id',
         'especialidad',
-        'telefono',
     ];
 
     public function user()
@@ -36,5 +35,20 @@ class Especialista extends Model
     public function citas()
     {
         return $this->hasMany(Cita::class);
+    }
+
+    /**
+     * Actualiza los campos del especialista con los datos proporcionados.
+     *
+     * @param array $datos datos del especialista a actualizar
+     * @return bool true si se actualizó correctamente, false en caso de error
+     */
+    public function actualizarEspecialista(array $datos): bool
+    {
+        //Rellena los atributos del modelo con los datos dados
+        $this->fill($datos);
+
+        //Guarda y retorna true si fue exitoso, false si falla
+        return $this->save();
     }
 }

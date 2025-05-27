@@ -12,8 +12,8 @@ class PacienteController extends Controller
 
     /**
      * Muestra una lista de pacientes.
-     * @return \Illuminate\Http\JsonResponse
-     * @throws \Illuminate\Validation\ValidationException
+     * Muestra todos los pacientes registrados en la base de datos.
+     * @return \Illuminate\Http\JsonResponse esta función devuelve una respuesta JSON con el listado de pacientes.
      * 
      */
     public function listarPacientes()
@@ -35,11 +35,17 @@ class PacienteController extends Controller
         return response()->json($respuesta, $codigo);
     }
 
+
     /**
      * Crea un nuevo paciente.
+     * Registra un nuevo paciente en la base de datos.
+     * Se valida que el usuario asociado exista y no esté ya registrado como paciente.
+     * 
      * @param \Illuminate\Http\Request $solicitud recibe los datos del paciente
-     * @return \Illuminate\Http\JsonResponse
-     * @throws \Illuminate\Validation\ValidationException
+     * @return \Illuminate\Http\JsonResponse devuelve una respuesta JSON con el paciente creado o un mensaje de error.
+     * @throws \Illuminate\Validation\ValidationException si los datos no cumplen con las reglas de validación.
+     * @throws \Exception lanza excepción si ocurre un error al crear el paciente.
+     * 
      */
     public function nuevoPaciente(Request $solicitud)
     {
@@ -53,18 +59,13 @@ class PacienteController extends Controller
         ]);
 
         try {
-            $paciente = Paciente::create($solicitud->all());
+            $datos = $solicitud->only(['usuario_id', 'nss', 'fecha_nacimiento']);
+            $paciente = Paciente::create($datos);
 
-            if (!$paciente) {
-                $this->registrarLog('pacientes', 'store', null, 'Error al crear el paciente');
-                $respuesta = ['message' => 'No se pudo crear el paciente'];
-                $codigo = 500;
-            } else {
-                $this->registrarLog('pacientes', 'store', $paciente->id, 'Paciente creado');
-                $respuesta = $paciente;
-            }
+            $this->registrarLog('pacientes', 'store', $paciente->id, 'Paciente creado correctamente');
+            $respuesta = $paciente;
         } catch (\Exception $e) {
-            $this->registrarLog('pacientes', 'store', null, 'Excepción al crear el paciente: ' . $e->getMessage());
+            $this->registrarLog('pacientes', 'store', null, 'Excepción al crear paciente: ' . $e->getMessage());
             $respuesta = ['message' => 'Error interno al crear el paciente'];
             $codigo = 500;
         }
@@ -72,11 +73,13 @@ class PacienteController extends Controller
         return response()->json($respuesta, $codigo);
     }
 
+
     /**
      * Muestra un paciente específico.
+     * Busca un paciente por su ID y devuelve sus datos.
+     * Se valida que el ID sea numérico y que el paciente exista.
      * @param int $id ID del paciente a buscar
-     * @return \Illuminate\Http\JsonResponse
-     * @throws \Illuminate\Validation\ValidationException
+     * @return \Illuminate\Http\JsonResponse devuelve una respuesta JSON con los datos del paciente o un mensaje de error.
      * 
      */
     public function verPaciente($id)
@@ -84,28 +87,35 @@ class PacienteController extends Controller
         $respuesta = [];
         $codigo = 200;
 
-        $paciente = Paciente::find($id);
+        if (!is_numeric($id)) {
+            $this->registrarLog('pacientes', 'show', $id, 'ID inválido (no numérico)');
+            $respuesta = ['message' => 'ID inválido'];
+            $codigo = 400;
+        } else {
+            $paciente = Paciente::find($id);
 
-        if (!$paciente) {
-            $this->registrarLog('pacientes', 'show', $id, 'Paciente no encontrado');
-            $respuesta = ['message' => 'Paciente no encontrado'];
-            $codigo = 404;
-            return response()->json($respuesta, $codigo);
+            if (!$paciente) {
+                $this->registrarLog('pacientes', 'show', $id, 'Paciente no encontrado');
+                $respuesta = ['message' => 'Paciente no encontrado'];
+                $codigo = 404;
+            } else {
+                $this->registrarLog('pacientes', 'show', $id, 'Paciente consultado');
+                $respuesta = $paciente;
+            }
         }
-
-        $this->registrarLog('pacientes', 'show', $id, 'Paciente consultado');
-
-        $respuesta = $paciente;
 
         return response()->json($respuesta, $codigo);
     }
 
+
     /**
      * Actualiza los datos de un paciente.
+     * Actualiza la información de un paciente existente en la base de datos.
+     * Se valida que el ID sea numérico y que el paciente exista.
      * @param \Illuminate\Http\Request $solicitud lleva los datos del paciente a actualizar
      * @param int $id ID del paciente a actualizar
-     * @return \Illuminate\Http\JsonResponse
-     * @throws \Illuminate\Validation\ValidationException
+     * @return \Illuminate\Http\JsonResponse devuelve una respuesta JSON con los datos del paciente actualizado o un mensaje de error.
+     * @throws \Illuminate\Validation\ValidationException lanza excepción si los datos no cumplen con las reglas de validación.
      * 
      */
     public function actualizarPaciente(Request $solicitud, $id)
@@ -113,62 +123,75 @@ class PacienteController extends Controller
         $respuesta = [];
         $codigo = 200;
 
-        $paciente = Paciente::find($id);
+        if (!is_numeric($id)) {
+            $this->registrarLog('pacientes', 'update', $id, 'ID inválido (no numérico)');
+            $respuesta = ['message' => 'ID inválido'];
+            $codigo = 400;
+        } else {
+            $paciente = Paciente::find($id);
 
-        if (!$paciente) {
-            $this->registrarLog('pacientes', 'update', $id, 'Paciente no encontrado');
-            $respuesta = ['message' => 'Paciente no encontrado'];
-            $codigo = 404;
-            return response()->json($respuesta, $codigo);
+            if (!$paciente) {
+                $this->registrarLog('pacientes', 'update', $id, 'Paciente no encontrado');
+                $respuesta = ['message' => 'Paciente no encontrado'];
+                $codigo = 404;
+            } else {
+                $solicitud->validate([
+                    'nss' => 'nullable|string|max:20',
+                    'fecha_nacimiento' => 'nullable|date',
+                ]);
+
+                $paciente->update($solicitud->only(['nss', 'fecha_nacimiento']));
+
+                $this->registrarLog('pacientes', 'update', $id, 'Paciente actualizado');
+
+                $respuesta = [
+                    'message' => 'Paciente actualizado correctamente',
+                    'paciente' => $paciente,
+                ];
+            }
         }
-
-        $solicitud->validate([
-            'nss' => 'nullable|string|max:20',
-            'fecha_nacimiento' => 'nullable|date',
-        ]);
-
-        $paciente->update($solicitud->only(['nss', 'fecha_nacimiento']));
-
-        $this->registrarLog('pacientes', 'update', $id, 'Paciente actualizado');
-
-        $respuesta = [
-            'message' => 'Paciente actualizado correctamente',
-            'paciente' => $paciente,
-        ];
 
         return response()->json($respuesta, $codigo);
     }
+
 
     /**
      * Borrar un paciente (softDelete).
+     * Este método elimina un paciente por su ID.
+     * Se valida que el ID sea numérico y que el paciente exista.
      * @param int $id ID del paciente a eliminar
-     * @return \Illuminate\Http\JsonResponse
-     * @throws \Illuminate\Validation\ValidationException
+     * @return \Illuminate\Http\JsonResponse devuelve una respuesta JSON con un mensaje de éxito o un mensaje de error.
+     * 
      */
     public function borrarPaciente($id)
     {
-        $paciente = Paciente::find($id);
-
         $respuesta = [];
         $codigo = 200;
 
-        if (!$paciente) {
-            $this->registrarLog('pacientes', 'destroy', $id, 'Paciente no encontrado');
-
-            $codigo = 404;
-            $respuesta = ['message' => 'Paciente no encontrado'];
-            return response()->json($respuesta, $codigo); // Cortamos aquí
-        }
-
-        if ($paciente->delete()) {
-            $this->registrarLog('pacientes', 'destroy', $id, 'Paciente eliminado');
-            $respuesta = ['message' => 'Paciente eliminado correctamente'];
+        if (!is_numeric($id)) {
+            $this->registrarLog('pacientes', 'destroy', $id, 'ID inválido (no numérico)');
+            $respuesta = ['message' => 'ID inválido'];
+            $codigo = 400;
         } else {
-            $this->registrarLog('pacientes', 'destroy', $id, 'Fallo al eliminar paciente');
-            $respuesta = ['message' => 'No se pudo eliminar el paciente'];
-            $codigo = 500;
+            $paciente = Paciente::find($id);
+
+            if (!$paciente) {
+                $this->registrarLog('pacientes', 'destroy', $id, 'Paciente no encontrado');
+                $respuesta = ['message' => 'Paciente no encontrado'];
+                $codigo = 404;
+            } else {
+                if ($paciente->delete()) {
+                    $this->registrarLog('pacientes', 'destroy', $id, 'Paciente eliminado');
+                    $respuesta = ['message' => 'Paciente eliminado correctamente'];
+                } else {
+                    $this->registrarLog('pacientes', 'destroy', $id, 'Fallo al eliminar paciente');
+                    $respuesta = ['message' => 'No se pudo eliminar el paciente'];
+                    $codigo = 500;
+                }
+            }
         }
 
         return response()->json($respuesta, $codigo);
     }
+
 }

@@ -13,26 +13,37 @@ class EspecialistaController extends Controller
 
     /**
      * Mostrar todos los especialistas.
-     * @return \Illuminate\Http\JsonResponse
-     * @throws \Illuminate\Validation\ValidationException
-     * 
-     * 
+     * Devolverá una lista de todos los especialistas registrados en la base de datos.
+     * @return \Illuminate\Http\JsonResponse devolverá una respuesta JSON con el listado de especialistas o un mensaje de error si no hay especialistas registrados.
      */
     public function listarEspecialistas(): JsonResponse
     {
+        $respuesta = [];
+        $codigo = 200;
+
         $especialistas = Especialista::all();
 
-        $this->registrarLog(auth()->id(), 'listar_especialistas', 'Acceso a listado completo de especialistas');
+        if ($especialistas->isEmpty()) {
+            $this->registrarLog(auth()->id(), 'listar_especialistas', 'No hay especialistas registrados');
+            $respuesta = ['message' => 'No hay especialistas disponibles'];
+            $codigo = 404;
+        } else {
+            $this->registrarLog(auth()->id(), 'listar_especialistas', 'Listado de especialistas consultado');
+            $respuesta = ['especialistas' => $especialistas];
+        }
 
-        return response()->json(['especialistas' => $especialistas], 200);
+        return response()->json($respuesta, $codigo);
     }
+
 
     /**
      * Mostrar un especialista específico.
+     * Esta función busca un especialista por su ID y devuelve sus detalles.
+     * Si el especialista no se encuentra, se devuelve un mensaje de error.
+     * Se valida que el ID sea numérico y se maneja el caso en que no se encuentra el especialista.
      *
      * @param int $id ID del especialista que deseamos ver
-     * @throws \Illuminate\Validation\ValidationException
-     * @return JsonResponse
+     * @return JsonResponse devuelve una respuesta JSON con los detalles del especialista o un mensaje de error si no se encuentra.
      */
     public function verEspecialista(int $id): JsonResponse
     {
@@ -42,76 +53,90 @@ class EspecialistaController extends Controller
         $codigo = 200;
 
         if (!$especialista) {
-            $this->registrarLog(auth()->id(), 'mostrar_especialista_fallido', 'Especialista no encontrado', 'id');
-            $codigo = 404;
+            $this->registrarLog(auth()->id(), 'mostrar_especialista_fallido', "Especialista ID $id no encontrado", 'especialistas');
             $respuesta = ['message' => 'Especialista no encontrado'];
+            $codigo = 404;
+        } else {
+            $this->registrarLog(auth()->id(), 'mostrar_especialista', "Visualización del especialista ID $id", 'especialistas');
+            $respuesta = ['especialista' => $especialista];
         }
 
-        $this->registrarLog(auth()->id(), 'mostrar_especialista', "Visualización del especialista ID $id");
-
-        $respuesta = [
-            'especialista' => $especialista,
-        ];
         return response()->json($respuesta, $codigo);
     }
 
+
     /**
      * Actualizar la información de un especialista.
+     * Esta función permite actualizar los datos de un especialista existente en la base de datos.
+     * Se valida que el ID del especialista exista y se aplican las reglas de validación a los datos de la solicitud.
      *
      * @param Request $solicitud parámetro de solicitud que contiene los datos a actualizar
      * @param int $id ID del especialista que se desea actualizar
-     * @throws \Illuminate\Validation\ValidationException
-     * @return JsonResponse
+     * @throws \Illuminate\Validation\ValidationException si los datos no cumplen con las reglas de validación.
+     * @return JsonResponse devuelve una respuesta JSON con los detalles del especialista actualizado o un mensaje de error si no se encuentra el especialista.
      */
     public function actualizarEspecialista(Request $solicitud, int $id): JsonResponse
     {
         $especialista = Especialista::find($id);
-        $mensaje = '';
+        $respuesta = [];
         $codigo = 200;
 
         if (!$especialista) {
-            $this->registrarLog(auth()->id(), 'actualizar_especialista_fallido', 'Especialista no encontrado', 'id');
-            $mensaje = ['message' => 'Especialista no encontrado'];
+            $this->registrarLog(auth()->id(), 'actualizar_especialista_fallido', "Especialista ID $id no encontrado", 'especialistas');
+            $respuesta = ['message' => 'Especialista no encontrado'];
             $codigo = 404;
         } else {
             $solicitud->validate([
-                'nombre'     => 'string|nullable',
-                'apellidos'  => 'string|nullable',
-                'telefono'   => 'string|nullable',
+                'nombre'    => 'string|nullable',
+                'apellidos' => 'string|nullable',
             ]);
 
-            $especialista->actualizarEspecialista($solicitud->only(['nombre', 'apellidos', 'telefono']));
+            $especialista->actualizarEspecialista($solicitud->only(['nombre', 'apellidos']));
 
-            $this->registrarLog(auth()->id(), 'actualizar_especialista', "Actualización del especialista ID $id");
+            $this->registrarLog(auth()->id(), 'actualizar_especialista', "Actualización del especialista ID $id", 'especialistas');
 
-            $mensaje = ['message' => 'Especialista actualizado correctamente', 'especialista' => $especialista];
+            $respuesta = ['message' => 'Especialista actualizado correctamente', 'especialista' => $especialista];
         }
 
-        return response()->json($mensaje, $codigo);
+        return response()->json($respuesta, $codigo);
     }
+
 
     /**
      * Borrar un especialista (softDelete).
+     * Esta función elimina un especialista de la base de datos de forma segura.
+     * Se valida que el ID del especialista exista antes de intentar eliminarlo.
+     * Si el especialista no se encuentra, se devuelve un mensaje de error.
      *
      * @param int $id ID del especialista que se desea eliminar
-     * @return JsonResponse
+     * @return JsonResponse devuelve una respuesta JSON con un mensaje de confirmación o un mensaje de error si no se encuentra el especialista.
+     * @throws \Exception si ocurre un error al intentar eliminar el especialista.
+     * 
      */
     public function borrarEspecialista(int $id): JsonResponse
     {
-        $especialista = Especialista::find($id);
-        $mensaje = '';
         $codigo = 200;
+        $mensaje = [];
+
+        $especialista = Especialista::find($id);
 
         if (!$especialista) {
             $this->registrarLog(auth()->id(), 'eliminar_especialista_fallido', 'Especialista no encontrado', 'id');
             $mensaje = ['message' => 'Especialista no encontrado'];
             $codigo = 404;
         } else {
-            $especialista->delete();
+            try {
+                $especialista->delete();
 
-            $this->registrarLog(auth()->id(), 'eliminar_especialista', "Especialista ID $id eliminado");
+                $this->registrarLog(auth()->id(), 'eliminar_especialista', "Especialista ID $id eliminado");
 
-            $mensaje = ['message' => 'Especialista eliminado correctamente'];
+                $mensaje = ['message' => 'Especialista eliminado correctamente'];
+            } catch (\Exception $e) {
+                $this->registrarLog(auth()->id(), 'eliminar_especialista_error', "Error al eliminar especialista ID $id: " . $e->getMessage());
+
+                $mensaje = ['message' => 'Error interno al eliminar especialista'];
+                $codigo = 500;
+            }
         }
 
         return response()->json($mensaje, $codigo);
@@ -120,10 +145,15 @@ class EspecialistaController extends Controller
 
     /**
      * Almacena un nuevo especialista en la base de datos.
+     * Esta función recibe una solicitud con los datos del especialista,
+     * valida los datos y crea un nuevo registro en la base de datos.
+     * Se maneja la transacción para asegurar que los datos se guarden correctamente
+     * y se registran los logs correspondientes.
      *
      * @param  \Illuminate\Http\Request  $solicitud request que contiene los datos del especialista
-     * @throws \Illuminate\Validation\ValidationException
-     * @return \Illuminate\Http\JsonResponse
+     * @throws \Illuminate\Validation\ValidationException devuelve una excepción si los datos no cumplen con las reglas de validación.
+     * @throws \Exception lanza una excepción si ocurre un error al guardar el especialista.
+     * @return \Illuminate\Http\JsonResponse devuelve una respuesta JSON con un mensaje de éxito o error y el código de respuesta HTTP.
      */
     public function nuevoEspecialista(Request $solicitud)
     {
@@ -142,29 +172,41 @@ class EspecialistaController extends Controller
             $respuesta = ['errors' => $validar->errors()];
             $codigo = 422;
         } else {
-            $user = User::create([
-                'nombre'     => $solicitud->nombre,
-                'apellidos'  => $solicitud->apellidos,
-                'email'      => $solicitud->email,
-                'password'   => Hash::make($solicitud->password),
-            ]);
+            DB::beginTransaction();
 
-            $user->assignRole('especialista');
+            try {
+                $user = User::create([
+                    'nombre'     => $solicitud->nombre,
+                    'apellidos'  => $solicitud->apellidos,
+                    'email'      => $solicitud->email,
+                    'password'   => Hash::make($solicitud->password),
+                ]);
 
-            Especialista::create([
-                'user_id'       => $user->id,
-                'especialidad'  => $solicitud->especialidad,
-            ]);
+                $user->assignRole('especialista');
 
-            // Registrar log
-            $this->registrarLog('create', 'especialistas', 'user_id', $user->id);
+                $especialista = Especialista::create([
+                    'user_id'       => $user->id,
+                    'especialidad'  => $solicitud->especialidad,
+                ]);
 
-            $respuesta = [
-                'message' => 'Especialista creado correctamente',
-                'user_id' => $user->id,
-            ];
+                $this->registrarLog(auth()->id(), 'create', "Especialista creado, user_id: $user->id", 'especialistas');
+
+                DB::commit();
+
+                $respuesta = [
+                    'message' => 'Especialista creado correctamente',
+                    'especialista' => $especialista,
+                    'user' => $user,
+                ];
+            } catch (\Exception $e) {
+                DB::rollBack();
+
+                $respuesta = ['message' => 'Error interno al crear especialista', 'error' => $e->getMessage()];
+                $codigo = 500;
+            }
         }
 
         return response()->json($respuesta, $codigo);
     }
+
 }
