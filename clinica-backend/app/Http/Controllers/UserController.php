@@ -15,42 +15,55 @@ class UserController extends Controller
 
     /**
      * 
-     * Funcion para llistar todos los usuarios.
-     * * @return \Illuminate\Http\JsonResponse
+     * Función para llistar todos los usuarios.
+     * @return \Illuminate\Http\JsonResponse devuelve una respuesta JSON con el listado de usuarios.
      * 
      * 
      *  */    
-    public function listarTodos()
+    public function listarTodos(): JsonResponse
     {
         $usuarios = User::all();
+        $codigo = 200;
+        $respuesta = $usuarios;
 
-        $this->registrarLog(auth()->id(), 'listar', 'Listar todos los usuarios', 'users');
+        if ($usuarios->isEmpty()) {
+            $respuesta = ['message' => 'No hay usuarios registrados'];
+            $codigo = 404;
+            $this->registrarLog(auth()->id(), 'listar', 'No hay usuarios registrados', 'users');
+        } else {
+            $this->registrarLog(auth()->id(), 'listar', 'Listar todos los usuarios', 'users');
+        }
 
-        return response()->json($usuarios);
+        return response()->json($respuesta, $codigo);
     }
 
     /**
      * 
-     * Funcion para mostrar un usuario por ID.
+     * Función para mostrar un usuario por ID.
      * 
      * @param int $id id del usuario a buscar
-     * @return \Illuminate\Http\JsonResponse
+     * @return \Illuminate\Http\JsonResponse devuelve una respuesta JSON con los datos del usuario o un mensaje de error.
+     * 
      */
-    public function verUsuario($id)
+    public function verUsuario($id): JsonResponse
     {
-        $usuario = User::find($id);
-
-        $respuesta = [];
         $codigo = 200;
 
-        if (!$usuario) {
-            $respuesta = ['mensaje' => 'Usuario no encontrado'];
-            $codigo = 404;
+        if (!is_numeric($id)) {
+            $respuesta = ['mensaje' => 'ID inválido. Debe ser numérico'];
+            $codigo = 400;
         } else {
-            $respuesta = $usuario;
-        }
+            $usuario = User::find($id);
 
-        $this->registrarLog(auth()->id(), 'ver', "Ver usuario ID: $id", 'users');
+            if (!$usuario) {
+                $respuesta = ['mensaje' => 'Usuario no encontrado'];
+                $codigo = 404;
+            } else {
+                $respuesta = $usuario;
+            }
+
+            $this->registrarLog(auth()->id(), 'ver', "Ver usuario ID: $id", 'users');
+        }
 
         return response()->json($respuesta, $codigo);
     }
@@ -58,32 +71,32 @@ class UserController extends Controller
 
     /**
      * 
-     * Funcion para crear un nuevo usuario.
+     * Función para crear un nuevo usuario.
+     * * Valida los datos de entrada y crea un nuevo usuario en la base de datos.
      * 
      * @param Request $solicitud datos del usuario nuevo
-     * @return \Illuminate\Http\JsonResponse
+     * @return \Illuminate\Http\JsonResponse devuelve una respuesta JSON con los datos del usuario creado o un mensaje de error.
      */
-    public function insertarUsuario(Request $solicitud)
+    public function insertarUsuario(Request $solicitud): JsonResponse
     {
-        $validacion = Validator::make($solicitud->all(), [
-            'nombre' => 'required|string|max:255',
-            'apellidos' => 'required|string|max:255',
-            'email' => 'required|email|unique:users',
-            'password' => 'required|min:6',
-        ]);
-
-        $respuesta = [];
         $codigo = 201;
 
-        if ($validacion->fails()) {
-            $respuesta = ['errores' => $validacion->errors()];
+        $validador = Validator::make($solicitud->all(), [
+            'nombre'     => 'required|string|max:255',
+            'apellidos'  => 'required|string|max:255',
+            'email'      => 'required|email|unique:users,email',
+            'password'   => 'required|string|min:6|confirmed',
+        ]);
+
+        if ($validador->fails()) {
+            $respuesta = ['errores' => $validador->errors()];
             $codigo = 422;
         } else {
             $usuario = User::create([
-                'nombre'    => $solicitud->nombre,
-                'apellidos' => $solicitud->apellidos,
-                'email'     => $solicitud->email,
-                'password'  => Hash::make($solicitud->password),
+                'nombre'     => $solicitud->input('nombre'),
+                'apellidos'  => $solicitud->input('apellidos'),
+                'email'      => $solicitud->input('email'),
+                'password'   => Hash::make($solicitud->input('password')),
             ]);
 
             $respuesta = $usuario;
@@ -95,59 +108,74 @@ class UserController extends Controller
     }
 
 
+
     /**
      * 
      * Función para actualizar un usuario por ID.
+     * * Valida los datos de entrada y actualiza el usuario en la base de datos.
      * 
-     * @param Request $solicitud
+     * @param Request $solicitud datos del usuario a actualizar
      * @param int $id ID del usuario que se va a actualizar
      * @return \Illuminate\Http\JsonResponse
      */
     public function actualizar(Request $solicitud, $id)
     {
-        $usuario = User::find($id);
-
         $respuesta = [];
         $codigo = 200;
 
-        if (!$usuario) {
-            $respuesta = ['mensaje' => 'Usuario no encontrado'];
-            $codigo = 404;
+        if (!is_numeric($id)) {
+            $respuesta = ['mensaje' => 'ID inválido'];
+            $codigo = 400;
         } else {
-            $usuario->update($solicitud->only(['nombre', 'apellidos', 'email']));
-            $respuesta = $usuario;
+            $usuario = User::find($id);
 
-            $this->registrarLog(auth()->id(), 'actualizar', "Usuario ID: $id", 'users');
+            if (!$usuario) {
+                $respuesta = ['mensaje' => 'Usuario no encontrado'];
+                $codigo = 404;
+            } else {
+                $usuario->update($solicitud->only(['nombre', 'apellidos', 'email']));
+                $respuesta = $usuario;
+
+                $this->registrarLog(auth()->id(), 'actualizar', "Usuario ID: $id", 'users');
+            }
         }
 
         return response()->json($respuesta, $codigo);
     }
+
 
     /**
      * 
      * Función para eliminar un usuario por ID (SoftDelete).
+     * Valida el ID y elimina el usuario de forma segura.
      * 
      * @param int $id ID del usuario que se va a eliminar
-     * @return \Illuminate\Http\JsonResponse
+     * @return \Illuminate\Http\JsonResponse devuelve una respuesta JSON con un mensaje de éxito o error.
      */
     public function borrarUsuario($id)
     {
-        $usuario = User::find($id);
-
         $respuesta = [];
         $codigo = 200;
 
-        if (!$usuario) {
-            $respuesta = ['mensaje' => 'Usuario no encontrado'];
-            $codigo = 404;
+        if (!is_numeric($id)) {
+            $respuesta = ['mensaje' => 'ID inválido'];
+            $codigo = 400;
         } else {
-            $usuario->delete();
-            $respuesta = ['mensaje' => 'Usuario eliminado correctamente'];
+            $usuario = User::find($id);
 
-            $this->registrarLog(auth()->id(), 'eliminar', "Usuario ID: $id", 'users');
+            if (!$usuario) {
+                $respuesta = ['mensaje' => 'Usuario no encontrado'];
+                $codigo = 404;
+            } else {
+                $usuario->delete();
+                $respuesta = ['mensaje' => 'Usuario eliminado correctamente'];
+
+                $this->registrarLog(auth()->id(), 'eliminar', "Usuario ID: $id", 'users');
+            }
         }
 
         return response()->json($respuesta, $codigo);
     }
+
 
 }

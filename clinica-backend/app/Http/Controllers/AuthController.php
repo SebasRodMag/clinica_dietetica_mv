@@ -17,7 +17,9 @@ class AuthController extends Controller
      * Manejo de la solicitud de inicio de sesión.
      *
      * @param Request $solicitud datos de la solicitud HTTP
-     * @return \Illuminate\Http\JsonResponse
+     * @return \Illuminate\Http\JsonResponse datos del usuario autenticado, token de acceso y código de respuesta HTTP
+     * 
+     * La función registrarLog está llamada solo si el login es exitoso, pues si falla no hay usuario para identificar.
      */
 
     public function login(Request $solicitud)
@@ -59,47 +61,57 @@ class AuthController extends Controller
 
     /**
      * Manejo de la solicitud de cierre de sesión.
-     * @return \Illuminate\Http\JsonResponse
+     * 
+     * @return \Illuminate\Http\JsonResponse devuelve un mensaje de éxito o error y el código de respuesta HTTP
      */
 
-    public function logout()
+    public function logout(): JsonResponse
     {
+        $codigoRespuesta = 200;
+        $respuesta = ['message' => 'Sesión cerrada correctamente'];
+
         $user = auth()->user();
 
         if ($user) {
             $user->tokens()->delete();
 
-            $this->registrarLog($user->id, 'logout', 'Cierre de sesión exitoso', 'users');
+            $this->registrarLog('users', 'logout', $user->id, 'Cierre de sesión exitoso');
+        } else {
+            $codigoRespuesta = 401;
+            $respuesta = ['message' => 'No autenticado'];
         }
 
-        return response()->json(['message' => 'Sesión cerrada correctamente']);
+        return response()->json($respuesta, $codigoRespuesta);
     }
 
     /**
      * Devuelve los datos del usuario autenticado.
      *
      * @param Request $solicitud datos de la solicitud HTTP
-     * @return \Illuminate\Http\JsonResponse
+     * @return \Illuminate\Http\JsonResponse devuelve los datos del usuario autenticado o un mensaje de error si no hay usuario autenticado
      */
-    public function me(Request $solicitud)
+    public function me(Request $solicitud): JsonResponse
     {
-        $respuesta = [];
         $codigoRespuesta = 200;
+        $respuesta = [];
 
-        $user = ($solicitud)->user();
+        $user = $solicitud->user();
 
         if (!$user) {
+            //Teme,os una función para registrar logs, pero no se puede usar aquí porque no hay usuario autenticado.
+            // Por lo tanto, se registra manualmente.
             Log::create([
-                'usuario_id' => null,
-                'accion' => 'acceso_me_fallido',
-                'descripcion' => 'Token no válido o usuario no autenticado.',
-                'tabla_afectada' => 'users',
+                'usuario_id'      => null,
+                'accion'          => 'acceso_me_fallido',
+                'descripcion'     => 'Token no válido o usuario no autenticado.',
+                'tabla_afectada'  => 'users',
+                'columna_afectada'=> null,
             ]);
 
-            $respuesta = ['message' => 'No autenticado'];
             $codigoRespuesta = 401;
+            $respuesta = ['message' => 'No autenticado'];
         } else {
-            $this->registrarLog($user->id, 'acceso_me', 'Acceso al endpoint /me', 'users');
+            $this->registrarLog('users', 'acceso_me', $user->id, 'Acceso al endpoint /me');
 
             $respuesta = [
                 'user' => [
