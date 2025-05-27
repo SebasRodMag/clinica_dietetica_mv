@@ -3,13 +3,20 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class Historial extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, HasFactory;
 
     protected $fillable = [
-        'paciente_id', 'especialista_id', 'descripcion'
+        'paciente_id',
+        'especialista_id',
+        'comentarios_paciente',
+        'observaciones_especialista',
+        'recomendaciones',
+        'dieta',
+        'lista_compra',
     ];
 
     public function paciente()
